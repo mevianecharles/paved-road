@@ -1,0 +1,95 @@
+---
+# provision-paved-road.yml
+#
+# This is the operational entry point of the paved road: a developer
+# runs this ONE playbook to provision secure infrastructure (via the
+# Terraform modules) AND apply baseline OS hardening — instead of
+# manually running terraform apply and then separately configuring
+# servers by hand.
+#
+# Usage:
+#   ansible-playbook provision-paved-road.yml \
+#     -e "bucket_name=app-uploads" \
+#     -e "environment=dev"
+
+- name: Provision secure infrastructure (paved road)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    terraform_dir: "../terraform/example-usage"
+
+  tasks:
+    - name: Initialize Terraform
+      ansible.builtin.command:
+        cmd: terraform init
+        chdir: "{{ terraform_dir }}"
+      register: tf_init
+      changed_when: "'Terraform has been successfully initialized' in tf_init.stdout"
+
+    - name: Apply secure Terraform modules
+      ansible.builtin.command:
+        cmd: >
+          terraform apply -auto-approve
+          -var="bucket_name={{ bucket_name }}"
+          -var="environment={{ environment }}"
+        chdir: "{{ terraform_dir }}"
+      register: tf_apply
+
+    - name: Show what was provisioned
+      ansible.builtin.debug:
+        var: tf_apply.stdout_lines
+
+
+- name: Apply baseline OS hardening to provisioned servers
+  hosts: paved_road_targets
+  become: true
+
+  tasks:
+    - name: Ensure automatic security updates are enabled
+      ansible.builtin.package:
+        name: unattended-upgrades
+        state: present
+
+    - name: Disable password authentication over SSH (key-only)
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+      notify: restart sshd
+
+    - name: Disable root login over SSH
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+      notify: restart sshd
+
+    - name: Ensure firewall is enabled
+      ansible.builtin.ufw:
+        state: enabled
+        policy: deny
+
+    - name: Allow SSH through firewall only
+      ansible.builtin.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Ensure fail2ban is installed (brute-force protection)
+      ansible.builtin.package:
+        name: fail2ban
+        state: present
+
+    - name: Ensure fail2ban is running
+      ansible.builtin.service:
+        name: fail2ban
+        state: started
+        enabled: true
+
+  handlers:
+    - name: restart sshd
+      ansible.builtin.service:
+        name: sshd
+        state: restarted

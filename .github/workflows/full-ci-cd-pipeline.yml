@@ -1,0 +1,95 @@
+name: Paved Road CI/CD — Scan, Build, Push to ECR, Deploy to EKS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - '**.tf'
+      - 'microservices/**'
+
+env:
+  AWS_REGION: eu-north-1
+  ECR_REGISTRY: 277140629239.dkr.ecr.eu-north-1.amazonaws.com
+  EKS_CLUSTER_NAME: drive-platform
+
+jobs:
+
+  # ---- CI: security scanning ----
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          soft_fail: false
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/
+          framework: terraform
+          soft_fail: false
+
+  # ---- CI: build and push Docker images to ECR ----
+  build-and-push:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push each microservice image
+        run: |
+          for service in location-service fuel-service lock-service alerts-service api-service; do
+            docker build -t $ECR_REGISTRY/drive-platform/$service:${{ github.sha }} \
+              -f microservices/$service/Dockerfile microservices/$service/
+            docker push $ECR_REGISTRY/drive-platform/$service:${{ github.sha }}
+          done
+
+  # ---- CD: deploy to EKS ----
+  deploy-to-eks:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+      - name: Update image tags and apply manifests
+        run: |
+          for service in location-service fuel-service lock-service alerts-service api-service; do
+            kubectl set image statefulset/$service \
+              $service=$ECR_REGISTRY/drive-platform/$service:${{ github.sha }} \
+              -n messaging
+          done
+
+      - name: Verify rollout
+        run: |
+          for service in location-service fuel-service lock-service alerts-service api-service; do
+            kubectl rollout status statefulset/$service -n messaging --timeout=120s
+          done

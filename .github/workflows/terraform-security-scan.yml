@@ -1,0 +1,39 @@
+name: Terraform Security Scan
+
+# Runs on every pull request touching Terraform code.
+# If a misconfiguration is found (e.g. an open security group, a public bucket),
+# the pipeline blocks the merge — the paved road is enforced automatically,
+# not left to a human reviewer to catch.
+
+on:
+  pull_request:
+    paths:
+      - '**.tf'
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          soft_fail: false   # fail the build on findings, don't just warn
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: terraform
+          soft_fail: false
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init (validate only, no backend)
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate

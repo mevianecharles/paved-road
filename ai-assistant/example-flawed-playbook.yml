@@ -1,0 +1,36 @@
+---
+# example-hardening-playbook.yml
+#
+# This is the kind of playbook a developer might write themselves —
+# use `kambi-paved-road-assistant.py review example-hardening-playbook.yml`
+# to see the AI assistant flag issues in it.
+
+- name: Baseline server hardening
+  hosts: all
+  become: true
+
+  vars:
+    admin_password: "SuperSecret123"   # <-- intentionally insecure, for demo
+
+  tasks:
+    - name: Ensure SSH root login is disabled
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+
+    - name: Create admin user
+      ansible.builtin.user:
+        name: admin
+        password: "{{ admin_password }}"   # <-- hardcoded secret, flagged by assistant
+        shell: /bin/bash
+
+    - name: Install fail2ban
+      ansible.builtin.apt:
+        name: fail2ban
+        state: present
+
+    - name: Ensure firewall is enabled
+      ansible.builtin.ufw:
+        state: enabled
+        policy: deny
