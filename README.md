@@ -15,7 +15,7 @@ pre-approved modules that already have security built in.
 This repo contains all four pieces of a real paved road:
 
 ```
-kambi-paved-road/
+satcorporation-paved-road/
 ├── terraform/           # The "road surface" — secure-by-default infrastructure modules
 ├── ansible/              # Provisions the Terraform modules + baseline OS hardening
 ├── puppet/               # Alternative hardening path — same job as Ansible, different tool

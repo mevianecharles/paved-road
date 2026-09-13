@@ -2,7 +2,7 @@
 # example-hardening-playbook.yml
 #
 # This is the kind of playbook a developer might write themselves —
-# use `kambi-paved-road-assistant.py review example-hardening-playbook.yml`
+# use `security-assistant.py review example-hardening-playbook.yml`
 # to see the AI assistant flag issues in it.
 
 - name: Baseline server hardening

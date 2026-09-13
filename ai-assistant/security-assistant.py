@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-kambi-paved-road-assistant.py
+security-assistant.py
 
 An AI-powered security review agent for Satcorporation's "paved road" initiative.
 It reviews Terraform and Ansible code, flags security issues in plain
@@ -13,9 +13,9 @@ while this agent explains WHY something matters and how it fits the
 bigger picture — the kind of context a junior developer actually needs.
 
 Usage:
-    python kambi-paved-road-assistant.py review path/to/main.tf
-    python kambi-paved-road-assistant.py review path/to/playbook.yml
-    python kambi-paved-road-assistant.py ask "How do I add IAM least-privilege to my EC2 role?"
+    python security-assistant.py review path/to/main.tf
+    python security-assistant.py review path/to/playbook.yml
+    python security-assistant.py ask "How do I add IAM least-privilege to my EC2 role?"
 
 Requires:
     pip install anthropic --break-system-packages
@@ -125,7 +125,7 @@ def ask_question(question: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="kambi-paved-road-assistant",
+        prog="security-assistant",
         description="AI security review assistant for the Satcorporation paved road",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
